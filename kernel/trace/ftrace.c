@@ -36,6 +36,8 @@
 #include <linux/rcupdate.h>
 #include <linux/kprobes.h>
 
+#include <kunit/visibility.h>
+
 #include <trace/events/sched.h>
 
 #include <asm/sections.h>
@@ -1665,6 +1667,7 @@ unsigned long ftrace_location(unsigned long ip)
 	}
 	return loc;
 }
+EXPORT_SYMBOL_IF_KUNIT(ftrace_location);
 
 /**
  * ftrace_text_reserved - return true if range contains an ftrace location

@@ -344,4 +344,14 @@ config CROS_KUNIT_EC_SPI_TEST
 	help
 	  Kunit tests for ChromeOS EC over SPI.
 
+config CROS_KUNIT_EC_UART_TEST
+	tristate "Kunit tests for ChromeOS EC over UART" if !KUNIT_ALL_TESTS
+	depends on KUNIT && CROS_EC
+	default KUNIT_ALL_TESTS
+	depends on KUNIT_FTRACE_STUBS
+	depends on CROS_EC_UART
+	depends on GPIOLIB
+	help
+	  Kunit tests for ChromeOS EC over UART.
+
 endif # CHROMEOS_PLATFORMS

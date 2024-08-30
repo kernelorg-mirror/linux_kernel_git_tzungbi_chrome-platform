@@ -2463,5 +2463,14 @@ config MFD_UPBOARD_FPGA
 	  To compile this driver as a module, choose M here: the module will be
 	  called upboard-fpga.
 
+# Kunit test cases
+config MFD_KUNIT_CROS_EC_DEV_TEST
+	tristate "Kunit tests for ChromeOS EC MFD" if !KUNIT_ALL_TESTS
+	depends on KUNIT && CROS_EC
+	default KUNIT_ALL_TESTS
+	select MFD_CROS_EC_DEV
+	help
+	  Kunit tests for ChromeOS EC MFD.
+
 endmenu
 endif

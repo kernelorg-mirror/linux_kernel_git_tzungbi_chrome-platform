@@ -294,3 +294,6 @@ obj-$(CONFIG_MFD_RSMU_I2C)	+= rsmu_i2c.o rsmu_core.o
 obj-$(CONFIG_MFD_RSMU_SPI)	+= rsmu_spi.o rsmu_core.o
 
 obj-$(CONFIG_MFD_UPBOARD_FPGA)	+= upboard-fpga.o
+
+# Kunit test cases
+obj-$(CONFIG_MFD_KUNIT_CROS_EC_DEV_TEST) += cros_ec_dev_test.o

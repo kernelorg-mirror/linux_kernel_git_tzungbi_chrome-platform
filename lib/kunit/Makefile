@@ -16,6 +16,10 @@ ifeq ($(CONFIG_KUNIT_DEBUGFS),y)
 kunit-objs +=				debugfs.o
 endif
 
+ifeq ($(CONFIG_KUNIT_KPROBE_STUBS),y)
+kunit-objs +=				kprobe_stub.o
+endif
+
 # KUnit 'hooks' are built-in even when KUnit is built as a module.
 obj-y +=				hooks.o
 

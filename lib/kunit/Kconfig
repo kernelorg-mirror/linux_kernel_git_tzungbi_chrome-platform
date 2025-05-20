@@ -93,4 +93,11 @@ config KUNIT_AUTORUN_ENABLED
 	  In most cases this should be left as Y. Only if additional opt-in
 	  behavior is needed should this be set to N.
 
+config KUNIT_KPROBE_STUBS
+	bool "Support for stubbing out functions in KUnit tests with kprobes"
+	depends on KPROBES
+	help
+	  Builds support for stubbing out functions for the duration of KUnit
+	  test cases or suites using kprobes.
+
 endif # KUNIT

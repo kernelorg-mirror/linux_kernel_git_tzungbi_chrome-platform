@@ -11,6 +11,7 @@
 
 #include <linux/device.h>
 #include <kunit/device.h>
+#include <kunit/kprobe_stub.h>
 
 #include "string-stream.h"
 #include "try-catch-impl.h"
@@ -868,10 +869,63 @@ static struct kunit_suite kunit_current_test_suite = {
 	.test_cases = kunit_current_test_cases,
 };
 
+struct kprobe_stub_test_priv {
+	int kprobe_stub_test_callee_called;
+	int fake_kprobe_stub_test_callee_called;
+};
+
+static noinline void kprobe_stub_test_callee(struct kunit *test)
+{
+	struct kprobe_stub_test_priv *priv = test->priv;
+	priv->kprobe_stub_test_callee_called++;
+}
+
+static void fake_kprobe_stub_test_callee(struct kunit *test)
+{
+	struct kprobe_stub_test_priv *priv = test->priv;
+	priv->fake_kprobe_stub_test_callee_called++;
+}
+
+static void kunit_kprobe_stub_test(struct kunit *test)
+{
+	int i;
+	struct kprobe_stub_test_priv *priv;
+
+	priv = kunit_kzalloc(test, sizeof(*priv), GFP_KERNEL);
+	KUNIT_ASSERT_NOT_ERR_OR_NULL(test, priv);
+	test->priv = priv;
+
+	for (i = 1; i <= 20000; ++i) {
+		priv->kprobe_stub_test_callee_called = 0;
+		priv->fake_kprobe_stub_test_callee_called = 0;
+
+		kunit_activate_kprobe_stub(test, kprobe_stub_test_callee,
+					   fake_kprobe_stub_test_callee);
+		kprobe_stub_test_callee(test);
+		kunit_deactivate_kprobe_stub(test, kprobe_stub_test_callee);
+		KUNIT_EXPECT_EQ(test, priv->kprobe_stub_test_callee_called, 0);
+		KUNIT_EXPECT_EQ(test, priv->fake_kprobe_stub_test_callee_called, 1);
+
+		kprobe_stub_test_callee(test);
+		KUNIT_EXPECT_EQ(test, priv->kprobe_stub_test_callee_called, 1);
+		KUNIT_EXPECT_EQ(test, priv->fake_kprobe_stub_test_callee_called, 1);
+	}
+}
+
+static struct kunit_case kunit_stub_test_cases[] = {
+	KUNIT_CASE(kunit_kprobe_stub_test),
+	{}
+};
+
+static struct kunit_suite kunit_stub_test_suite = {
+	.name = "kunit_stub",
+	.test_cases = kunit_stub_test_cases,
+};
+
 kunit_test_suites(&kunit_try_catch_test_suite, &kunit_resource_test_suite,
 		  &kunit_log_test_suite, &kunit_status_test_suite,
 		  &kunit_current_test_suite, &kunit_device_test_suite,
-		  &kunit_fault_test_suite);
+		  &kunit_fault_test_suite, &kunit_stub_test_suite);
 
 MODULE_DESCRIPTION("KUnit test for core test infrastructure");
 MODULE_LICENSE("GPL v2");

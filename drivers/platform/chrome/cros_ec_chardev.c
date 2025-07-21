@@ -11,6 +11,7 @@
  */
 
 #include <linux/init.h>
+#include <linux/cleanup.h>
 #include <linux/device.h>
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
@@ -24,6 +25,7 @@
 #include <linux/poll.h>
 #include <linux/revocable.h>
 #include <linux/slab.h>
+#include <linux/spinlock.h>
 #include <linux/types.h>
 #include <linux/uaccess.h>
 
@@ -38,6 +40,8 @@ struct chardev_priv {
 	wait_queue_head_t wait_event;
 	unsigned long event_mask;
 	struct list_head events;
+	/* This protects `events`. */
+	spinlock_t lock;
 	size_t event_len;
 	u16 cmd_offset;
 };
@@ -126,11 +130,10 @@ static int cros_ec_chardev_mkbp_event(struct notifier_block *nb,
 		memcpy(event->data, &ec_dev->event_data.data, ec_dev->event_size);
 	}
 
-	spin_lock(&priv->wait_event.lock);
+	guard(spinlock_irq)(&priv->lock);
 	list_add_tail(&event->node, &priv->events);
 	priv->event_len += total_size;
-	wake_up_locked(&priv->wait_event);
-	spin_unlock(&priv->wait_event.lock);
+	wake_up(&priv->wait_event);
 
 	return NOTIFY_OK;
 }
@@ -141,30 +144,23 @@ static struct ec_event *cros_ec_chardev_fetch_event(struct chardev_priv *priv,
 	struct ec_event *event;
 	int err;
 
-	spin_lock(&priv->wait_event.lock);
-	if (!block && list_empty(&priv->events)) {
-		event = ERR_PTR(-EWOULDBLOCK);
-		goto out;
-	}
+	guard(spinlock_irq)(&priv->lock);
 
-	if (!fetch) {
-		event = NULL;
-		goto out;
-	}
+	if (!block && list_empty(&priv->events))
+		return ERR_PTR(-EWOULDBLOCK);
 
-	err = wait_event_interruptible_locked(priv->wait_event,
-					      !list_empty(&priv->events));
-	if (err) {
-		event = ERR_PTR(err);
-		goto out;
-	}
+	if (!fetch)
+		return NULL;
+
+	err = wait_event_interruptible_lock_irq(priv->wait_event,
+						!list_empty(&priv->events),
+						priv->lock);
+	if (err)
+		return ERR_PTR(err);
 
 	event = list_first_entry(&priv->events, struct ec_event, node);
 	list_del(&event->node);
 	priv->event_len -= sizeof(*event) + event->size;
-
-out:
-	spin_unlock(&priv->wait_event.lock);
 	return event;
 }
 
@@ -192,6 +188,7 @@ static int cros_ec_chardev_open(struct inode *inode, struct file *filp)
 	priv->cmd_offset = ec->cmd_offset;
 	filp->private_data = priv;
 	INIT_LIST_HEAD(&priv->events);
+	spin_lock_init(&priv->lock);
 	init_waitqueue_head(&priv->wait_event);
 	nonseekable_open(inode, filp);
 
@@ -217,6 +214,7 @@ static __poll_t cros_ec_chardev_poll(struct file *filp, poll_table *wait)
 
 	poll_wait(filp, &priv->wait_event, wait);
 
+	guard(spinlock_irq)(&priv->lock);
 	if (list_empty(&priv->events))
 		return 0;
 

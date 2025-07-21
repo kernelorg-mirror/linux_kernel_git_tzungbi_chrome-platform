@@ -143,6 +143,7 @@ static struct ec_event *cros_ec_chardev_fetch_event(struct chardev_priv *priv,
 {
 	struct ec_event *event;
 	int err;
+	struct cros_ec_device *ec_dev;
 
 	guard(spinlock_irq)(&priv->lock);
 
@@ -152,11 +153,19 @@ static struct ec_event *cros_ec_chardev_fetch_event(struct chardev_priv *priv,
 	if (!fetch)
 		return NULL;
 
-	err = wait_event_interruptible_lock_irq(priv->wait_event,
-						!list_empty(&priv->events),
-						priv->lock);
-	if (err)
-		return ERR_PTR(err);
+	do {
+		err = wait_event_interruptible_lock_irq_timeout(priv->wait_event,
+								!list_empty(&priv->events),
+								priv->lock,
+								HZ);
+		if (err < 0)
+			return ERR_PTR(err);
+
+		REVOCABLE(priv->ec_dev_rev, ec_dev) {
+			if (!ec_dev || !cros_ec_device_registered(ec_dev))
+				return ERR_PTR(-ENODEV);
+		}
+	} while (!err);
 
 	event = list_first_entry(&priv->events, struct ec_event, node);
 	list_del(&event->node);
@@ -210,7 +219,13 @@ free_priv:
 
 static __poll_t cros_ec_chardev_poll(struct file *filp, poll_table *wait)
 {
+	struct cros_ec_device *ec_dev;
 	struct chardev_priv *priv = filp->private_data;
+
+	REVOCABLE(priv->ec_dev_rev, ec_dev) {
+		if (!ec_dev || !cros_ec_device_registered(ec_dev))
+			return EPOLLERR;
+	}
 
 	poll_wait(filp, &priv->wait_event, wait);
 

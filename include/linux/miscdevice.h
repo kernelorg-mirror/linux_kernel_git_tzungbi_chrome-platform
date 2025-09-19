@@ -5,6 +5,7 @@
 #include <linux/list.h>
 #include <linux/types.h>
 #include <linux/device.h>
+#include <linux/revocable.h>
 
 /*
  *	These allocations are managed by device@lanana.org. If you need
@@ -92,6 +93,9 @@ struct miscdevice {
 	const struct attribute_group **groups;
 	const char *nodename;
 	umode_t mode;
+	struct revocable_provider **rps;
+	size_t num_rps;
+	const struct fs_revocable_operations *frops;
 };
 
 extern int misc_register(struct miscdevice *misc);

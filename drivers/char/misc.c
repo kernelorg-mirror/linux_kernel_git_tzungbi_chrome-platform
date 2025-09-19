@@ -50,6 +50,7 @@
 #include <linux/tty.h>
 #include <linux/kmod.h>
 #include <linux/gfp.h>
+#include <linux/fs_revocable.h>
 
 /*
  * Head entry for the doubly linked miscdevice list
@@ -159,6 +160,13 @@ static int misc_open(struct inode *inode, struct file *file)
 
 	err = 0;
 	replace_fops(file, new_fops);
+
+	if (c->frops && c->rps)  {
+		err = fs_revocable_replace(file, c->frops, c->rps, c->num_rps);
+		if (err)
+			goto fail;
+	}
+
 	if (file->f_op->open)
 		err = file->f_op->open(inode, file);
 fail:

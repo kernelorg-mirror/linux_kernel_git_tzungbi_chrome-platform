@@ -13,6 +13,7 @@
 #include <linux/init.h>
 #include <linux/device.h>
 #include <linux/fs.h>
+#include <linux/fs_revocable.h>
 #include <linux/miscdevice.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
@@ -166,7 +167,6 @@ static int cros_ec_chardev_open(struct inode *inode, struct file *filp)
 	if (!priv)
 		return -ENOMEM;
 
-	priv->ec_dev = ec_dev;
 	priv->cmd_offset = ec->cmd_offset;
 	filp->private_data = priv;
 	INIT_LIST_HEAD(&priv->events);
@@ -370,6 +370,19 @@ static const struct file_operations chardev_fops = {
 #endif
 };
 
+static int cros_ec_chardev_rev_try_access(struct revocable **revs,
+					  size_t num_revs, void *data)
+{
+	struct chardev_priv *priv = data;
+
+	priv->ec_dev = revocable_try_access(revs[0]);
+	return priv->ec_dev ? 0 : -ENODEV;
+}
+
+static const struct fs_revocable_operations cros_ec_chardev_frops = {
+	.try_access = cros_ec_chardev_rev_try_access,
+};
+
 static int cros_ec_chardev_probe(struct platform_device *pdev)
 {
 	struct cros_ec_dev *ec = dev_get_drvdata(pdev->dev.parent);
@@ -385,6 +398,13 @@ static int cros_ec_chardev_probe(struct platform_device *pdev)
 	misc->fops = &chardev_fops;
 	misc->name = ec_platform->ec_name;
 	misc->parent = pdev->dev.parent;
+
+	misc->rps = devm_kcalloc(&pdev->dev, 1, sizeof(*misc->rps), GFP_KERNEL);
+	if (!misc->rps)
+		return -ENOMEM;
+	misc->rps[0] = ec->ec_dev->revocable_provider;
+	misc->num_rps = 1;
+	misc->frops = &cros_ec_chardev_frops;
 
 	dev_set_drvdata(&pdev->dev, misc);
 

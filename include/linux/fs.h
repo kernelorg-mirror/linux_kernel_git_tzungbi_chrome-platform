@@ -80,6 +80,7 @@ struct fs_context;
 struct fs_parameter_spec;
 struct file_kattr;
 struct iomap_ops;
+struct fs_revocable_replacement;
 
 extern void __init inode_init(void);
 extern void __init inode_init_early(void);
@@ -1248,6 +1249,7 @@ struct file {
 	};
 	file_ref_t			f_ref;
 	/* --- cacheline 3 boundary (192 bytes) --- */
+	struct fs_revocable_replacement *f_rr;
 } __randomize_layout
   __attribute__((aligned(4)));	/* lest something weird decides that 2 is OK */
 

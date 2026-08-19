@@ -165,19 +165,14 @@ static int cros_ec_wait_until_complete(struct cros_ec_device *ec_dev, uint32_t *
 		if (msg->result != EC_RES_SUCCESS)
 			return ret;
 
-		if (ret == 0) {
-			ret = -EPROTO;
-			break;
-		}
+		if (ret == 0)
+			return -EPROTO;
 
 		if (!(status->flags & EC_COMMS_STATUS_PROCESSING))
 			return ret;
 	}
 
-	if (i >= EC_COMMAND_RETRIES)
-		ret = -EAGAIN;
-
-	return ret;
+	return -EAGAIN;
 }
 
 static int cros_ec_send_command(struct cros_ec_device *ec_dev, struct cros_ec_command *msg)
